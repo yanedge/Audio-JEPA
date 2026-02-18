@@ -155,3 +155,5 @@ dmypy.json
 
 # Aim logging
 .aim
+data/AudioSetEncodec/data
+data/AudioSetEncodec/output
