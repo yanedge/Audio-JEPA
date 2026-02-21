@@ -1,6 +1,6 @@
 # configs/data/asmfe.yaml
 
-_target_: src.data.asmfe_datamodule.AudioSetDataModule
+_target_: src.data.asmfe_datamodule.ASMFEDataModule
 
 defaults:
   - _self_
@@ -15,11 +15,11 @@ pin_memory: true
 persistent_workers: true
 
 # Frontend parameters
-sr: 32000 # Native AudioSet sample rate
+sr: 32000 # Native ASMFE sample rate
 # target_time_bins: 1024 # We want the spectrogram to be of dim (n_mels, target_time_bins)
 clip_length: 10 # Seconds
 # Task parameters
-classes_num: 527 # AudioSet ontology size
+classes_num: 527 # ASMFE ontology size
 
 # waveform transforms
 transforms:
@@ -30,10 +30,10 @@ transforms:
     clip_length: ${data.clip_length}
 
 ##################################################
-# AudioSetDataset (HDF5-based)
+# ASMFEDataset (HDF5-based)
 ##################################################
 train_dataset:
-  _target_: src.data.components.asmfe_dataset.AudioSetDataset
+  _target_: src.data.components.asmfe_dataset.ASMFEDataset
   hdf5_file: ${paths.data_dir}/AudioSet/full_unbal_bal_train_wav.h5
   sr: ${data.sr}
   clip_length: ${data.clip_length}
@@ -53,7 +53,7 @@ val_dataset:
   exclude_csv_path: ${paths.data_dir}/AudioSet/silent_files_balanced_train_soxrhq.csv
 
 eval_dataset:
-  _target_: src.data.components.asmfe_dataset.AudioSetDataset
+  _target_: src.data.components.asmfe_dataset.ASMFEDataset
   hdf5_file: ${paths.data_dir}/AudioSet/eval_soxrhq.h5
   sr: ${data.sr}
   clip_length: ${data.clip_length}

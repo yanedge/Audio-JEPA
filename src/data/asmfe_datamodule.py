@@ -3,11 +3,11 @@ import lightning as L
 import torch
 from torch.utils.data import DataLoader, random_split
 from torch.utils.data import Dataset
-from src.data.components.audioset_dataset import AudioSetBatch
+from src.data.components.asmfe_dataset import ASMFEBatch
 
 
-class AudioSetDataModule(L.LightningDataModule):
-    """AudioSet DataModule implementing stochastic time-frequency masking strategy.
+class ASMFEDataModule(L.LightningDataModule):
+    """ASMFE DataModule implementing stochastic time-frequency masking strategy.
     
     Implements curriculum-based masking patterns for hierarchical audio representation
     learning following HuBERT/AST paradigms. Supports both global context masks for 
@@ -34,7 +34,7 @@ class AudioSetDataModule(L.LightningDataModule):
         transforms = None,
         seed: Optional[int] = None
     ):
-        """Initialize AudioSet DataModule.
+        """Initialize ASMFE DataModule.
         
         Args:
             train_file: Path to training HDF5
@@ -49,7 +49,7 @@ class AudioSetDataModule(L.LightningDataModule):
             n_fft: STFT window size
             hop_length: STFT stride
             clip_length: Temporal context (seconds)
-            classes_num: AudioSet taxonomy size
+            classes_num: ASMFE taxonomy size
             num_prediction_masks: Number of local prediction tasks
             mask_params: T-F masking configuration
             seed: Random seed for reproducibility
@@ -105,15 +105,15 @@ class AudioSetDataModule(L.LightningDataModule):
             
         self.data_test = self.eval_dataset
     
-    def collate_to_audioset_batch(self, batch):
-        """Wrapper that calls mask_collator and converts result to AudioSetBatch.
+    def collate_to_asmfe_batch(self, batch):
+        """Wrapper that calls mask_collator and converts result to ASMFEBatch.
         
-        This decouples the mask components from knowing about AudioSetBatch structure.
+        This decouples the mask components from knowing about ASMFEBatch structure.
         The mask collators work with dicts, and we wrap the result here.
         """
         collated_batch = self.mask_collator(batch)
         
-        return AudioSetBatch(
+        return ASMFEBatch(
             waveforms=collated_batch['waveform'],
             spectrograms=collated_batch.get('transformed_waveform'),
             context_masks=collated_batch.get('context_masks'),
@@ -125,7 +125,7 @@ class AudioSetDataModule(L.LightningDataModule):
         return DataLoader(
             dataset=self.data_train,
             batch_size=self.batch_size,
-            collate_fn=self.collate_to_audioset_batch,
+            collate_fn=self.collate_to_asmfe_batch,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -137,7 +137,7 @@ class AudioSetDataModule(L.LightningDataModule):
         return DataLoader(
             dataset=self.data_val,
             batch_size=self.batch_size,
-            collate_fn=self.collate_to_audioset_batch,
+            collate_fn=self.collate_to_asmfe_batch,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -149,7 +149,7 @@ class AudioSetDataModule(L.LightningDataModule):
         return DataLoader(
             dataset=self.data_test,
             batch_size=self.batch_size,
-            collate_fn=self.collate_to_audioset_batch,
+            collate_fn=self.collate_to_asmfe_batch,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -158,4 +158,4 @@ class AudioSetDataModule(L.LightningDataModule):
 
 
 if __name__ == "__main__":
-    _ = AudioSetDataModule()
+    _ = ASMFEDataModule()

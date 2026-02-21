@@ -1,4 +1,4 @@
-# src/data/components/audioset_dataset.py
+# src/data/components/asmfe_dataset.py
 
 from typing import Dict, Optional, Tuple, List, Union
 import torch
@@ -16,7 +16,7 @@ from src.utils import audio_utils
 
 @dataclass
 class ASMFEBatch:
-    """Batch container for self-supervised AudioSet learning with masking.
+    """Batch container for self-supervised ASMFE learning with masking.
     """
     waveforms: torch.Tensor
     spectrograms: torch.Tensor
@@ -27,7 +27,7 @@ class ASMFEBatch:
     
     # add a method to display the batch
     def __str__(self):
-        str = f"Audioset batch:\n"
+        str = f"ASMFE batch:\n"
         str += f" - Batch size:                                   {self.waveforms.shape[0]}\n"
         str += f" - Waveforms [B, samples]:                       {self.waveforms.shape}\n"
         str += f" - Spectrograms [B, C, T, n_mels]:               {self.spectrograms.shape}\n"
@@ -40,7 +40,7 @@ class ASMFEBatch:
         str += f" - Audio names:                                  {len(self.audio_names)} names\n"
         return str
 
-class AudioSetDataset(Dataset):
+class ASMFEDataset(Dataset):
     def __init__(
         self,
         hdf5_file: str,
