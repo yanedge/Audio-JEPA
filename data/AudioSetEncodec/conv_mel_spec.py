@@ -9,6 +9,7 @@ import glob
 import numpy as np
 import soundfile as sf
 import h5py
+import matplotlib.pyplot as plt
 
 # Add project root to path so we can import src module
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -55,12 +56,30 @@ def conv_to_mfe(audio, sr):
     mfe = mel_spec_transform(audio)
     return mfe
 
+def save_mfe(audio, mfe, id, sr):
+
+    wav_file = os.path.join(output_dir, f"{id}.wav")
+    sf.write(wav_file, audio.cpu().numpy().squeeze(), samplerate=sr)
+    print(f'Audio saved to {wav_file}')
+
+    plt.figure(figsize=(10, 4))
+    plt.imshow(mfe.squeeze().numpy().T, aspect='auto', origin='lower', cmap='viridis')
+    plt.colorbar(label='Amplitude')
+    plt.title(f'Mel Spectrogram - {dataset}')
+    plt.xlabel('Time')
+    plt.ylabel('Mel Frequency')
+    plt.tight_layout()
+    png_file = os.path.join(output_dir, f'{id}_mfe.png')
+    plt.savefig(png_file)
+    plt.close()
+    print(f'PNG saved to {png_file}')
+
 if __name__ == "__main__":
     for dataset in datasets:
         segments = os.path.join(current_dir, f'data/{dataset}.json')
         segments = json.load(open(segments, 'r'))
 
-        num_samples = len(segments) // 1000
+        num_samples = len(segments) // 10000
 
         rec = []
 
@@ -75,10 +94,10 @@ if __name__ == "__main__":
                 encodec_file = os.path.join(current_dir, f"data/{dataset}/{part}/storage2/audioset_proc/encodec/{dataset}/{part}/{filename}")
             else:
                 # For balanced_train_segments and eval_segments, files are directly in dataset folders
-                encodec_file = os.path.join(current_dir, f"data/{dataset}/{filename}")
+                encodec_file = os.path.join(current_dir, f"data/{dataset}/{dataset}/{filename}")
             
             if os.path.exists(encodec_file):
-                print(f'Processing {encodec_file}')
+                print(f'Processing {dataset} {encodec_file.split("/")[-1]}')
                 audio = dec_encodec(encodec_file)
                 mfe = conv_to_mfe(audio, sr=32000)
                 print(f'Mel spectrogram shape: {mfe.shape}')
@@ -98,3 +117,7 @@ if __name__ == "__main__":
                 grp.create_dataset('mfe', data=item['mfe'])
                 grp.create_dataset('label', data=item['label'])
         print(f'Saved to {output_file}')
+
+        save_mfe(audio, mfe, dataset, 32000)
+
+        break
