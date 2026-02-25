@@ -17,12 +17,17 @@ sys.path.insert(0, project_root)
 
 from src.data.components.mel_spec import MelSpecTransform
 
-datasets = ["balanced_train_segments", "eval_segments", "unbalanced_train_segments"]
+datasets = [
+    "balanced_train_segments",
+    "eval_segments",
+    #"unbalanced_train_segments"
+    ]
 
 config_file = os.path.join(project_root, 'configs/data/asmfe.yaml')
 with open(config_file, 'r') as f:
     cfg = yaml.safe_load(f)
-n_mels = cfg.get('n_mels', 96)
+# Fix: read from nested transforms config
+n_mels = cfg['transforms'][0]['n_mels']
 clip_length = cfg.get('clip_length', 10)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -56,6 +61,15 @@ def conv_to_mfe(audio, sr):
     mfe = mel_spec_transform(audio)
     return mfe
 
+def labels_to_binary(labels_str, label_to_idx, classes_num=527):
+    """Convert comma-separated label string to binary vector"""
+    binary = np.zeros(classes_num, dtype=np.float32)
+    for label in labels_str.split(','):
+        label = label.strip()
+        if label in label_to_idx:
+            binary[label_to_idx[label]] = 1.0
+    return binary
+
 def save_mfe(audio, mfe, id, sr):
 
     wav_file = os.path.join(output_dir, f"{id}.wav")
@@ -75,11 +89,16 @@ def save_mfe(audio, mfe, id, sr):
     print(f'PNG saved to {png_file}')
 
 if __name__ == "__main__":
+    # Fix: load ontology once
+    with open(os.path.join(current_dir, '../AudioSet/ontology.json'), 'r') as f:
+        ontology = json.load(f)
+    label_to_idx = {entry['id']: i for i, entry in enumerate(ontology)}
+
     for dataset in datasets:
         segments = os.path.join(current_dir, f'data/{dataset}.json')
         segments = json.load(open(segments, 'r'))
 
-        num_samples = len(segments) // 10000
+        num_samples = len(segments) // 1000
 
         rec = []
 
@@ -101,23 +120,26 @@ if __name__ == "__main__":
                 audio = dec_encodec(encodec_file)
                 mfe = conv_to_mfe(audio, sr=32000)
                 print(f'Mel spectrogram shape: {mfe.shape}')
-                res = {
+                rec.append({
                     "mfe": mfe,
-                    "label": seg['labels']
-                }
+                    "label": seg['labels'],
+                    "filename": filename
+                })
             else:
                 raise FileNotFoundError(f'Encodec file not found: {encodec_file}')
             
-            rec.append(res)
-
         output_file = os.path.join(output_dir, f'{dataset}_mfe.h5')
         with h5py.File(output_file, 'w') as hf:
-            for i, item in enumerate(rec):
-                grp = hf.create_group(f'sample_{i}')
-                grp.create_dataset('mfe', data=item['mfe'])
-                grp.create_dataset('label', data=item['label'])
-        print(f'Saved to {output_file}')
+            mfes = np.stack([item['mfe'].squeeze().numpy() for item in rec])                      # (N, time, n_mels)
+            filenames = np.array([item['filename'] for item in rec], dtype='S64')                 # (N,)
+            targets = np.stack([labels_to_binary(item['label'], label_to_idx) for item in rec])  # (N, classes_num)
+            labels = np.array([item['label'] for item in rec], dtype='S256')                      # (N,) raw label strings
+
+            hf.create_dataset('mfe', data=mfes)
+            hf.create_dataset('audio_name', data=filenames)
+            hf.create_dataset('target', data=targets)
+            hf.create_dataset('label', data=labels)
+
+        print(f'Saved {len(rec)} samples to {output_file}')
 
         save_mfe(audio, mfe, dataset, 32000)
-
-        break
