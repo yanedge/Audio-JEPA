@@ -2,6 +2,7 @@ import json
 import yaml
 import sys
 import os
+import argparse
 from scipy import signal
 from transformers import EncodecModel
 import torch
@@ -19,7 +20,7 @@ from src.data.components.mel_spec import MelSpecTransform
 
 datasets = [
     "balanced_train_segments",
-    "eval_segments",
+    #"eval_segments",
     #"unbalanced_train_segments"
     ]
 
@@ -31,8 +32,7 @@ n_mels = cfg['transforms'][0]['n_mels']
 clip_length = cfg.get('clip_length', 10)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-output_dir = os.path.join(current_dir, './output')
-os.makedirs(output_dir, exist_ok=True)
+default_output_dir = os.path.join(current_dir, 'output')
 
 # Load the model and processor
 model = EncodecModel.from_pretrained("facebook/encodec_24khz")
@@ -61,8 +61,10 @@ def conv_to_mfe(audio, sr):
     mfe = mel_spec_transform(audio)
     return mfe
 
-def labels_to_binary(labels_str, label_to_idx, classes_num=527):
+def labels_to_binary(labels_str, label_to_idx, classes_num=None):
     """Convert comma-separated label string to binary vector"""
+    if classes_num is None:
+        classes_num = max(label_to_idx.values()) + 1
     binary = np.zeros(classes_num, dtype=np.float32)
     for label in labels_str.split(','):
         label = label.strip()
@@ -70,7 +72,7 @@ def labels_to_binary(labels_str, label_to_idx, classes_num=527):
             binary[label_to_idx[label]] = 1.0
     return binary
 
-def save_mfe(audio, mfe, id, sr):
+def save_mfe(audio, mfe, id, sr, output_dir):
 
     wav_file = os.path.join(output_dir, f"{id}.wav")
     sf.write(wav_file, audio.cpu().numpy().squeeze(), samplerate=sr)
@@ -89,16 +91,35 @@ def save_mfe(audio, mfe, id, sr):
     print(f'PNG saved to {png_file}')
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Convert Encodec files to MFE H5 datasets")
+    parser.add_argument(
+        "input_dir",
+        type=str,
+        help="Input directory containing dataset JSON files and encoded files",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=default_output_dir,
+        help="Output directory for generated WAV/PNG/H5 files",
+    )
+    args = parser.parse_args()
+
+    input_dir = os.path.abspath(args.input_dir)
+    output_dir = os.path.abspath(args.output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+
     # Fix: load ontology once
-    with open(os.path.join(current_dir, '../AudioSet/ontology.json'), 'r') as f:
+    with open(os.path.join(current_dir, 'ontology.json'), 'r') as f:
         ontology = json.load(f)
     label_to_idx = {entry['id']: i for i, entry in enumerate(ontology)}
+    num_classes = len(label_to_idx)
 
     for dataset in datasets:
-        segments = os.path.join(current_dir, f'data/{dataset}.json')
+        segments = os.path.join(input_dir, f'{dataset}.json')
         segments = json.load(open(segments, 'r'))
 
-        num_samples = len(segments) // 1000
+        num_samples = len(segments)
 
         rec = []
 
@@ -110,13 +131,13 @@ if __name__ == "__main__":
             if dataset == 'unbalanced_train_segments':
                 # For unbalanced, files are nested: data/unbalanced_train_segments/{part}/storage2/audioset_proc/encodec/unbalanced_train_segments/{part}/{filename}
                 part = seg['file_id'].split('/')[-2]
-                encodec_file = os.path.join(current_dir, f"data/{dataset}/{part}/storage2/audioset_proc/encodec/{dataset}/{part}/{filename}")
+                encodec_file = os.path.join(input_dir, f"{dataset}/{part}/storage2/audioset_proc/encodec/{dataset}/{part}/{filename}")
             else:
                 # For balanced_train_segments and eval_segments, files are directly in dataset folders
-                encodec_file = os.path.join(current_dir, f"data/{dataset}/{dataset}/{filename}")
+                encodec_file = os.path.join(input_dir, f"{dataset}/{dataset}/{filename}")
             
             if os.path.exists(encodec_file):
-                print(f'Processing {dataset} {encodec_file.split("/")[-1]}')
+                print(f'Processing {s}/{num_samples} {dataset} {encodec_file.split("/")[-1]}')
                 audio = dec_encodec(encodec_file)
                 mfe = conv_to_mfe(audio, sr=32000)
                 print(f'Mel spectrogram shape: {mfe.shape}')
@@ -132,7 +153,7 @@ if __name__ == "__main__":
         with h5py.File(output_file, 'w') as hf:
             mfes = np.stack([item['mfe'].squeeze().numpy() for item in rec])                      # (N, time, n_mels)
             filenames = np.array([item['filename'] for item in rec], dtype='S64')                 # (N,)
-            targets = np.stack([labels_to_binary(item['label'], label_to_idx) for item in rec])  # (N, classes_num)
+            targets = np.stack([labels_to_binary(item['label'], label_to_idx, num_classes) for item in rec])  # (N, classes_num)
             labels = np.array([item['label'] for item in rec], dtype='S256')                      # (N,) raw label strings
 
             hf.create_dataset('mfe', data=mfes)
@@ -142,4 +163,4 @@ if __name__ == "__main__":
 
         print(f'Saved {len(rec)} samples to {output_file}')
 
-        save_mfe(audio, mfe, dataset, 32000)
+        save_mfe(audio, mfe, dataset, 32000, output_dir)
