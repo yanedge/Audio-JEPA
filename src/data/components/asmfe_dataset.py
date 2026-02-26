@@ -49,6 +49,7 @@ class ASMFEDataset(Dataset):
         classes_num: int = 527,
         in_mem: bool = False,
         mp3_dataset: bool = True,
+        precomputed_mfe: bool = False,
         transforms: Optional[List[torch.nn.Module]] = None,
         exclude_csv_path: Optional[str] = None
     ):
@@ -58,6 +59,7 @@ class ASMFEDataset(Dataset):
         self.clip_length = clip_length * sr
         self.classes_num = classes_num
         self.mp3_dataset = mp3_dataset
+        self.precomputed_mfe = precomputed_mfe
         self.transforms = transforms
 
         # Handle in-memory HDF5
@@ -103,8 +105,20 @@ class ASMFEDataset(Dataset):
         audio_name = self.dataset_file['audio_name'][original_idx].decode()
 
         # Load core data
-        waveform = self._load_waveform(original_idx)
         target = self._load_target(original_idx)
+
+        if self.precomputed_mfe:
+            spectrogram = self._load_mfe(original_idx)
+            waveform = torch.zeros(self.clip_length, dtype=torch.float32)
+            item = {
+                'waveform': waveform,
+                'transformed_waveform': spectrogram,
+                'target': target,
+                'audio_name': audio_name
+            }
+            return item
+
+        waveform = self._load_waveform(original_idx)
 
         item = {
             'waveform': waveform,
@@ -135,7 +149,12 @@ class ASMFEDataset(Dataset):
         target = self.dataset_file['target'][idx]
         if self.mp3_dataset:
             target = np.unpackbits(target, axis=-1, count=self.classes_num).astype(np.float32)
-        return torch.from_numpy(target)
+        return torch.from_numpy(target).float()
+
+    def _load_mfe(self, idx: int) -> torch.Tensor:
+        """Load precomputed mel spectrogram and add channel dimension [1, T, F]."""
+        mfe = self.dataset_file['mfe'][idx]
+        return torch.from_numpy(mfe).float().unsqueeze(0)
 
     def _apply_transforms(self, waveform: torch.Tensor) -> torch.Tensor:
         """Apply transformation pipeline to waveform"""

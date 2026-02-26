@@ -3,7 +3,6 @@ import lightning as L
 import torch
 from torch.utils.data import DataLoader, random_split
 from torch.utils.data import Dataset
-from src.data.components.asmfe_dataset import ASMFEBatch
 
 
 class ASMFEDataModule(L.LightningDataModule):
@@ -105,27 +104,12 @@ class ASMFEDataModule(L.LightningDataModule):
             
         self.data_test = self.eval_dataset
     
-    def collate_to_asmfe_batch(self, batch):
-        """Wrapper that calls mask_collator and converts result to ASMFEBatch.
-        
-        This decouples the mask components from knowing about ASMFEBatch structure.
-        The mask collators work with dicts, and we wrap the result here.
-        """
-        collated_batch = self.mask_collator(batch)
-        
-        return ASMFEBatch(
-            waveforms=collated_batch['waveform'],
-            spectrograms=collated_batch.get('transformed_waveform'),
-            context_masks=collated_batch.get('context_masks'),
-            prediction_masks=collated_batch.get('prediction_masks'),
-            targets=collated_batch['target'],
-            audio_names=collated_batch['audio_name']
-        )
+    def train_dataloader(self) -> DataLoader:
         """Build training dataloader."""
         return DataLoader(
             dataset=self.data_train,
             batch_size=self.batch_size,
-            collate_fn=self.collate_to_asmfe_batch,
+            collate_fn=self.mask_collator,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -137,7 +121,7 @@ class ASMFEDataModule(L.LightningDataModule):
         return DataLoader(
             dataset=self.data_val,
             batch_size=self.batch_size,
-            collate_fn=self.collate_to_asmfe_batch,
+            collate_fn=self.mask_collator,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -149,7 +133,7 @@ class ASMFEDataModule(L.LightningDataModule):
         return DataLoader(
             dataset=self.data_test,
             batch_size=self.batch_size,
-            collate_fn=self.collate_to_asmfe_batch,
+            collate_fn=self.mask_collator,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,

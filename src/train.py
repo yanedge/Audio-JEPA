@@ -60,9 +60,13 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info("Instantiating loggers...")
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
 
-    spectro_config = cfg.data.transforms[0]    
-    n_mels = spectro_config.n_mels
-    time_bins = spectro_config.target_time_bins
+    if cfg.data.get("transforms"):
+        spectro_config = cfg.data.transforms[0]
+        n_mels = spectro_config.n_mels
+        time_bins = spectro_config.target_time_bins
+    else:
+        n_mels = cfg.data.n_mels
+        time_bins = cfg.data.target_time_bins
     # Calculate the dimensions of the patched spectrogram
     patch_h = cfg.model.encoder.patch_size[0]
     patch_w = cfg.model.encoder.patch_size[1]
