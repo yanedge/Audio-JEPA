@@ -1,0 +1,62 @@
+# configs/data/asmfe.yaml
+
+_target_: src.data.asmfe_datamodule.ASMFEDataModule
+
+defaults:
+  - _self_
+
+# Data paths (resolved through Hydra)
+# val_prop: 0.1 # Proportion of the training data to use for validation. no use because val_dataset is provided
+
+# DataLoader configurations
+batch_size: 32
+num_workers: 8
+pin_memory: true
+persistent_workers: true
+
+# Frontend parameters
+sr: 32000 # Native ASMFE sample rate
+clip_length: 10 # Seconds
+n_mels: 96
+target_time_bins: 1024
+# Task parameters
+classes_num: 632 # AudioSet ontology size
+
+# precomputed MFE: disable waveform frontend transforms
+transforms: null
+
+##################################################
+# ASMFEDataset (HDF5-based)
+##################################################
+train_dataset:
+  _target_: src.data.components.asmfe_dataset.ASMFEDataset
+  hdf5_file: ${paths.data_dir}/AudioSetEncodec/balanced_train_segments_mfe.h5
+  sr: ${data.sr}
+  clip_length: ${data.clip_length}
+  classes_num: ${data.classes_num}
+  precomputed_mfe: true
+  mp3_dataset: false
+  transforms: ${data.transforms}
+  exclude_csv_path: null
+
+val_dataset:
+  _target_: src.data.components.asmfe_dataset.ASMFEDataset
+  hdf5_file: ${paths.data_dir}/AudioSetEncodec/eval_segments_mfe.h5
+  sr: ${data.sr}
+  clip_length: ${data.clip_length}
+  classes_num: ${data.classes_num}
+  precomputed_mfe: true
+  mp3_dataset: false
+  transforms: ${data.transforms}
+  exclude_csv_path: null
+
+eval_dataset:
+  _target_: src.data.components.asmfe_dataset.ASMFEDataset
+  hdf5_file: ${paths.data_dir}/AudioSetEncodec/eval_segments_mfe.h5
+  sr: ${data.sr}
+  clip_length: ${data.clip_length}
+  classes_num: ${data.classes_num}
+  precomputed_mfe: true
+  mp3_dataset: false
+  transforms: ${data.transforms}
+  exclude_csv_path: null
