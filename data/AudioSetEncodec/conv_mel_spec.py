@@ -19,8 +19,8 @@ sys.path.insert(0, project_root)
 from src.data.components.mel_spec import MelSpecTransform
 
 datasets = [
-    "balanced_train_segments",
-    #"eval_segments",
+    #"balanced_train_segments",
+    "eval_segments",
     #"unbalanced_train_segments"
     ]
 
@@ -28,7 +28,7 @@ config_file = os.path.join(project_root, 'configs/data/asmfe.yaml')
 with open(config_file, 'r') as f:
     cfg = yaml.safe_load(f)
 # Fix: read from nested transforms config
-n_mels = cfg['transforms'][0]['n_mels']
+n_mels = cfg.get('n_mels', 96)
 clip_length = cfg.get('clip_length', 10)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -103,10 +103,16 @@ if __name__ == "__main__":
         default=default_output_dir,
         help="Output directory for generated WAV/PNG/H5 files",
     )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing output files if set",
+    )
     args = parser.parse_args()
 
     input_dir = os.path.abspath(args.input_dir)
     output_dir = os.path.abspath(args.output_dir)
+    overwrite = args.overwrite
     os.makedirs(output_dir, exist_ok=True)
 
     # Fix: load ontology once
@@ -116,7 +122,13 @@ if __name__ == "__main__":
     num_classes = len(label_to_idx)
 
     for dataset in datasets:
-        segments = os.path.join(input_dir, f'{dataset}.json')
+
+        output_file = os.path.join(output_dir, f"{dataset}_mfe.h5")
+        if os.path.exists(output_file) and not overwrite:
+            print(f"Output file {output_file} exists. Use --overwrite to overwrite.")
+            continue
+
+        segments = os.path.join(input_dir, f"{dataset}.json")
         segments = json.load(open(segments, 'r'))
 
         num_samples = len(segments)
@@ -126,7 +138,7 @@ if __name__ == "__main__":
         for s in range(num_samples):
             seg = segments[s]
             filename = seg['file_id'].split('/')[-1]  # Get just the filename
-            
+
             # Try multiple possible paths depending on dataset structure
             if dataset == 'unbalanced_train_segments':
                 # For unbalanced, files are nested: data/unbalanced_train_segments/{part}/storage2/audioset_proc/encodec/unbalanced_train_segments/{part}/{filename}
@@ -135,7 +147,7 @@ if __name__ == "__main__":
             else:
                 # For balanced_train_segments and eval_segments, files are directly in dataset folders
                 encodec_file = os.path.join(input_dir, f"{dataset}/{dataset}/{filename}")
-            
+
             if os.path.exists(encodec_file):
                 print(f'Processing {s}/{num_samples} {dataset} {encodec_file.split("/")[-1]}')
                 audio = dec_encodec(encodec_file)
@@ -148,8 +160,7 @@ if __name__ == "__main__":
                 })
             else:
                 raise FileNotFoundError(f'Encodec file not found: {encodec_file}')
-            
-        output_file = os.path.join(output_dir, f'{dataset}_mfe.h5')
+
         with h5py.File(output_file, 'w') as hf:
             mfes = np.stack([item['mfe'].squeeze().numpy() for item in rec])                      # (N, time, n_mels)
             filenames = np.array([item['filename'] for item in rec], dtype='S64')                 # (N,)
